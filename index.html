@@ -1,0 +1,25 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<script type="text/javascript" charset="utf-8" src="jquery.min.js"></script>
+		<script type="text/javascript" charset="utf-8" src="backgammon.js"></script>
+		
+		<script type="text/javascript" charset="utf-8">
+			window.onload = function () {
+			window.b = new BackGammon("backgammon");
+// End game
+			//b.loadState('{"currentPlayer":"w","gameState":4,"currentPosition":["","b","bb","","bbbbbb","","bbbbb","b","","","","","","","w","","","w","w","wwww","","wwww","wwww","","","","","","","","","","","",""],"currentDiceRoll":[],"remainingDices":[]}');
+// With home piece
+//b.loadState('{"currentPlayer":"b","gameState":4,"currentPosition":["","","","","bbbbbb","b","bbb","","","","","","","","","","","","","wwww","ww","www","ww","","","","","","","","","","","wwww","bbbbb"],"currentDiceRoll":[],"remainingDices":[]}');
+// LATEST
+//b.loadState('{"currentPlayer":"b","gameState":2,"currentPosition":["","","","","","","","","","","","","","","","","","","","","","","","","w","","","","","","","","","wwwwwwwwwwwwww","bbbbbbbbbbbbbbb"],"currentDiceRoll":[5,1],"remainingDices":[1]}');
+//locked piece
+//b.loadState('{"currentPlayer":"w","gameState":4,"currentPosition":["w","","bbb","bb","bb","bbb","bbbb","","b","","","","","","ww","","","ww","","www","www","b","wwww","","","","","","","","","","","",""],"currentDiceRoll":[],"remainingDices":[],"selectedPoint":9}');
+			};
+		</script>
+
+	</head>
+	<body>
+		<canvas id="backgammon" width="600px" height="500px"></canvas>
+	</body>
+</html>
