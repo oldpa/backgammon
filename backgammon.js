@@ -1,6 +1,10 @@
 ;(function() {
 'use strict';
 
+window['BackGammonBoard'] = window['BackGammonBoard'] || function(board) {
+  
+}
+
 window['BackGammon'] = window['BackGammon'] || function(canvasId, conf) {
   
 conf = conf || {}
@@ -20,7 +24,9 @@ var START_POSITION=['','ww','','','','','bbbbb',
     BLACK_PLAYER = 1,
     STATES = {CHOOSE_STARTER: 1, MOVING: 2, THROWING_DICE: 4},
     EMPTY = '',
-    SIGN_MAP = {'b': -1, 'w': 1};
+    SIGN_MAP = {'b': -1, 'w': 1},
+    HUMAN = 'human',
+    COMPUTER = 'computer';
 
 // object to return
 var widget = {};
@@ -41,6 +47,12 @@ var containerWidth,
     ROLL_BUTTON_Y,
     ROLL_BUTTON_WIDTH,
     ROLL_BUTTON_HEIGHT;
+    
+// listeners of changes
+var stateListeners = [];
+
+// other
+var playerTypeMap;
 
 // global state variables
 var selectedPoint,
@@ -48,7 +60,8 @@ var selectedPoint,
     remainingDices = [],
     currentPlayer,
     gameState,
-    currentPosition = START_POSITION; // 1 indexed list;
+    currentPosition = START_POSITION; // 1 indexed list
+
     
 // Previous states
 var previousStates = [];
@@ -84,6 +97,11 @@ var loadState = function(state) {
 var stateChanged = function () {
   console.log('adding state');
   previousStates.push(saveState());
+  
+  // Notify listeners
+  for (var i=0; i < stateListeners.length; i++) {
+    stateListeners[i]();
+  }
 }
 
 var undo = function () {
@@ -94,6 +112,10 @@ var undo = function () {
     previousStates = previousStates.slice(0, -2);
     redraw();
   }
+}
+
+var registerStateListener = function (listener) {
+  stateListeners.push(listener);
 }
 
 //------------------------------------------------------------------------------
@@ -192,7 +214,6 @@ var _movePiece = function (from_point, to_point) {
 var move = function (from_point, to_point) {
   // Check if valid move
   if (!isValidMove(from_point, to_point)) {
-    console.log('Not a valid move', from_point, to_point, currentPlayer);
     return false;
   }
   
@@ -201,12 +222,27 @@ var move = function (from_point, to_point) {
     _movePiece(to_point, OUT_MAP[swap(currentPlayer)]);
   }
   
+  // Remove the dice
+  useDice(getSteps(from_point, to_point))
+
+  // Move the piece
   _movePiece(from_point, to_point)
   
   // If player moved home (or above), move to home storage
   if (sign(currentPlayer)*to_point >= sign(currentPlayer)*HOME_MAP[currentPlayer]) {
     _movePiece(to_point, HOME_STORAGE_MAP[currentPlayer]);
   }
+  
+  // Check if turn is done
+  if (remainingDices.length == 0) {          
+    console.log(currentPlayer, ' is done switching');
+    currentPlayer = swap(currentPlayer);
+    currentDiceRoll = [];
+    gameState = STATES.THROWING_DICE;
+  }
+
+  stateChanged();
+  
   redraw();
   return true; 
 }
@@ -238,6 +274,10 @@ var getPlayerAtPoint = function (point) {
   return '';
 }
 
+var getPlayerType = function (player) {
+  return playerTypeMap[player];
+}
+
 var getPiecesAtPoint = function (point) {
     return currentPosition[point];
 }
@@ -256,6 +296,17 @@ var hasPieceBefore = function (player, point) {
   return false;
 }
 
+var getPointsWithPlayer = function(player, threshold) {
+  threshold = threshold || 0;
+  var points = [];
+  for (var i=0; i < 27; i++) {
+    if (getPlayerAtPoint(i) == player && getPiecesAtPoint(i).length >= threshold) {
+      points.push(i);
+    }
+  }
+  return points;
+}
+
 var getRandomDiceThrow = function() {
   return 1+Math.floor(Math.random()*6)
 }
@@ -270,12 +321,16 @@ var winner = function () {
   return '';
 }
 
+var getToPoint = function (player, fromPoint, diceValue) {
+  return fromPoint + SIGN_MAP[player] * diceValue;
+}
+
 var autoMove = function () {
   // sort remainingDices descending
   remainingDices = remainingDices.sort(function(a, b){return b-a;});
   var new_point;
   for (var i=0; i < remainingDices.length; i++) {
-    new_point = selectedPoint + SIGN_MAP[currentPlayer] * remainingDices[i];
+    new_point = getToPoint(currentPlayer, selectedPoint, remainingDices[i]);
     if (isValidMove(selectedPoint, new_point)) {
       return new_point;
     }
@@ -303,6 +358,12 @@ var inEndGame = function(player) {
   } else if ( currentPlayer == BLACK ) {
     return !hasPieceBefore(BLACK, 6);
   }
+}
+
+var useDice = function(diceValue) {
+  console.log('use dice', diceValue, remainingDices, remainingDices.indexOf(diceValue));
+  remainingDices.splice(remainingDices.indexOf(diceValue), 1);
+  console.log('after', remainingDices);
 }
 
 //------------------------------------------------------------------------------
@@ -387,28 +448,35 @@ var isPushingRoll = function(x, y) {
 }
 
 var onMouseClick = function (ev) {
+  
+  // Ignore click if current player isnt human
+  if (getPlayerType(currentPlayer) != HUMAN) {
+    console.log('ignoring click', currentPlayer, getPlayerType(currentPlayer), playerTypeMap);
+    return;
+  }
+  
   var x = ev.clientX - canvas.offsetLeft,
       y = ev.clientY - canvas.offsetTop;
+  
   if (gameState == STATES.MOVING) {
     var point = coordinatesToPoint(x, y);
     if (point != undefined) {
       pointClicked(point);  
     }
-  } else if (gameState == STATES.THROWING_DICE) {
-      diceRollPressed();
-  } else if (isPushingRoll(x, y)) {
-    diceRollPressed();
+  } else if (isPushingRoll(x, y) && (gameState == STATES.THROWING_DICE || gameState == STATES.CHOOSE_STARTER)) {
+    throwDice();
   }
   redraw();
 }
 
-var diceRollPressed = function() {
+var throwDice = function() {
   if (gameState === STATES.CHOOSE_STARTER) {
     var value = getRandomDiceThrow();
     // White has thrown
-    if (currentDiceRoll.length == 0) {
+    if (currentPlayer == WHITE) {
       currentDiceRoll.push(value);
       remainingDices.push(value);
+      currentPlayer = swap(currentPlayer);
     // Black has thrown
     } else {
       if (value == currentDiceRoll[0]) {
@@ -452,6 +520,8 @@ var diceRollPressed = function() {
       currentPlayer = swap(currentPlayer);
     }
   }
+  
+  stateChanged();
   redraw();
 }
 
@@ -465,19 +535,8 @@ var pointClicked = function (point) {
     }
     
     // valid move, move
-    if (move(selectedPoint, point)) {
-      
-      var steps = getSteps(selectedPoint, point);
-      remainingDices.splice(remainingDices.indexOf(steps), 1);
-      
-      // Have one more move to make
-      if (remainingDices.length == 0) {          
-        console.log(currentPlayer, ' is done switching');
-        currentPlayer = swap(currentPlayer);
-        currentDiceRoll = [];
-        gameState = STATES.THROWING_DICE;
-      }
-      stateChanged();
+    if (!move(selectedPoint, point)) {
+      console.log('Not a valid move', selectedPoint, point, currentPlayer);
     }
     
     selectPoint(undefined);
@@ -669,6 +728,7 @@ var init = function () {
   context = canvas.getContext('2d');
   
   initDimensions();
+  initMisc();
   initListeners();
   drawBoard();
   drawPieces();
@@ -695,22 +755,35 @@ var initDimensions = function () {
   ROLL_BUTTON_WIDTH = 50;
 };
 
+var initMisc = function () {
+  playerTypeMap = conf.playerTypeMap;
+  console.log('playertypemap',playerTypeMap);
+}
+
 var loadConfig = function () {
+  console.log('conf', conf);
   if (conf.hasOwnProperty('border') !== true) {
     conf.border = 20
   };
   if (conf.hasOwnProperty('boardColor') !== true) {
     conf.boardColor = "#00843f"
   }
+  if (conf.hasOwnProperty('playerTypeMap') !== true) {
+      conf.playerTypeMap = {};
+      conf.playerTypeMap[BLACK] = HUMAN;
+      conf.playerTypeMap[WHITE] = HUMAN;
+  }
   conf.boardBorderColor = "#5C3317";
   conf.lightColor = "#fff";
   conf.darkColor = "#000";
   conf.colorMap = {'w':"#ffffff",'b':"#990000"};
+
 };
 
 var startGame = function() {
   console.log('starting game');
   gameState = STATES.CHOOSE_STARTER;
+  currentPlayer = WHITE;
   redraw();
 }
 
@@ -722,7 +795,34 @@ var startGame = function() {
 widget.saveState = saveState;
 widget.loadState = loadState;
 widget.undo = undo;
-widget.hasPieceBefore = hasPieceBefore;
+widget.throwDice = throwDice;
+widget.move = move;
+widget.registerStateListener = registerStateListener;
+widget.getPointsWithPlayer = getPointsWithPlayer;
+widget.getToPoint = getToPoint;
+widget.isValidMove = isValidMove;
+widget.swap = swap;
+
+widget.getCurrentPosition = function () {
+  return currentPosition;
+}
+
+widget.getGameState = function () {
+  return gameState;
+}
+
+widget.getCurrentPlayer = function () {
+  return currentPlayer;
+}
+
+widget.getRemainingDices = function () {
+  return remainingDices;
+}
+
+//Constants
+widget.WHITE = WHITE;
+widget.BLACK = BLACK;
+widget.STATES = STATES;
 
 //------------------------------------------------------------------------------
 // Run init and return exposed object
