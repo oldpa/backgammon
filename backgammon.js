@@ -1,7 +1,7 @@
 ;(function() {
 'use strict';
 
-window['BackGammonBoard'] = window['BackGammonBoard'] || function(board) {
+window['BackGammonBoard'] = window['BackGammonBoard'] || function(serializedBoard) {
   
 // CONSTANTS
 var BLACK = 'b',
@@ -16,12 +16,19 @@ var BLACK = 'b',
     SIGN_MAP = {'b': -1, 'w': 1};
     
 // State
-board = board || START_POSITION;
+var board;
+
+// dices rolled before using them
+var diceRoll = [],
+// remaining dices
+    dices = [];
+
 
 // transaction
 
 var transactions = [];
 var transactionId = -1;
+var diceTransactions = [];
 
 //------------------------------------------------------------------------------
 // Util functions
@@ -135,8 +142,22 @@ var numPiecesOut = function (player) {
   return getNumPiecesAtPoint(outPos(player));
 }
 
+var toObject = function () {
+  return deepCopy({
+    board: board,
+    dices: dices,
+    diceRoll: diceRoll
+  });  
+}
+
+var fromObject = function (obj) {
+  board = obj.board;
+  dices = obj.dices;
+  diceRoll = obj.diceRoll;  
+}
+
 var copy = function () {
-  return new BackGammonBoard(deepCopy(board));
+  return new BackGammonBoard(toObject());
 }
 
 //------------------------------------------------------------------------------
@@ -144,8 +165,7 @@ var copy = function () {
 //------------------------------------------------------------------------------
     
 // Check if there exists a possible move for player
-var canMove = function (player, dices) {
-  console.log('canMove', player, dices);
+var canMove = function (player) {
   // Go through each points for player
   if (hasPieceOut(player)) {
     var point = outPos(player);
@@ -176,7 +196,7 @@ var canMove = function (player, dices) {
 }
 
 
-var isValidMove = function(from_point, to_point, player, dices) {
+var isValidMove = function(from_point, to_point, player) {
   // No piece at position
   if (!getPiecesAtPoint(from_point).length) {
     return false;
@@ -250,6 +270,8 @@ var move = function (from_point, to_point, player) {
   for (var i=0; i < moves.length; i++) {
     _movePiece(moves[i][0], moves[i][1]);
   }
+  var steps = getSteps(from_point, to_point, player);
+  useDice(steps);
   return true; 
 }
 
@@ -271,9 +293,13 @@ var getMovesWhenMoving = function(from_point, to_point, player) {
   return moves;
 }
 
+
+
 var beginTransaction = function () {
   transactionId += 1;
   transactions[transactionId] = [];
+  // TODO dont use deepCopy
+  diceTransactions[transactionId] = deepCopy(dices);
 }
 
 var rollback = function () {
@@ -281,9 +307,50 @@ var rollback = function () {
     _movePiece(transactions[transactionId][i][1], transactions[transactionId][i][0]);
   }
   transactions.splice(transactionId, 1);
+  dices = diceTransactions[transactionId];
+  diceTransactions.splice(transactionId, 1);
   transactionId -= 1;
 }
 
+//------------------------------------------------------------------------------
+// Dice functions
+//------------------------------------------------------------------------------
+var setDices = function(_dices) {
+  diceRoll = deepCopy(_dices);
+  dices = deepCopy(_dices);
+}
+
+var useDice = function(diceValue) {
+  dices.splice(dices.indexOf(diceValue), 1);
+}
+
+var hasRemainingDices = function () {
+  console.log('hasre', dices.length > 0)
+  return dices.length > 0;
+}
+
+var getRemainingDices = function () {
+  return dices;
+}
+
+var addDice = function (dice) {
+  diceRoll.push(dice);
+  dices.push(dice);
+}
+
+//------------------------------------------------------------------------------
+// Init
+//------------------------------------------------------------------------------
+
+var init = function () {
+  if (serializedBoard) {
+    fromObject(serializedBoard);
+  } else {
+    board = deepCopy(START_POSITION);
+  }
+}
+
+init();
 
 //------------------------------------------------------------------------------
 // Expose public functions
@@ -302,6 +369,7 @@ return_object.canMove = canMove;
 return_object.isValidMove = isValidMove;
 return_object.move = move;
 return_object.outPos = outPos;
+return_object.getHomePos = getHomePos;
 return_object.numPiecesHome = numPiecesHome;
 return_object.copy = copy;
 return_object.getPlayerScore = getPlayerScore;
@@ -310,6 +378,13 @@ return_object.beginTransaction = beginTransaction;
 return_object.getMovesWhenMoving = getMovesWhenMoving;
 return_object.removePiece = removePiece;
 return_object.addPiece = addPiece;
+return_object.setDices = setDices;
+return_object.useDice = useDice;
+return_object.getRemainingDices = getRemainingDices;
+return_object.hasRemainingDices = hasRemainingDices;
+return_object.addDice = addDice;
+return_object.toObject = toObject;
+return_object.fromObject = fromObject;
 // constants
 return_object.WHITE = WHITE;
 return_object.BLACK = BLACK;
@@ -365,8 +440,6 @@ var playerTypeMap,
 
 // global state variables
 var selectedPoint,
-    currentDiceRoll = [],
-    remainingDices = [],
     currentPlayer,
     gameState,
     board = new BackGammonBoard();
@@ -383,9 +456,7 @@ var saveState = function() {
   return JSON.stringify({
     currentPlayer: currentPlayer,
     gameState: gameState,
-    board: board.getBoard(),
-    currentDiceRoll: currentDiceRoll,
-    remainingDices: remainingDices,
+    board: board.toObject(),
     selectedPoint: selectedPoint
   });
 }
@@ -395,9 +466,8 @@ var loadState = function(state) {
   state = JSON.parse(state);
   currentPlayer = state.currentPlayer;
   gameState = state.gameState;
+  console.log('board', state.board)
   board = new BackGammonBoard(state.board);
-  currentDiceRoll = state.currentDiceRoll;
-  remainingDices = state.remainingDices;
   selectedPoint = state.selectedPoint;
   
   redraw();
@@ -455,7 +525,7 @@ var runAnimations = function(callback) {
 }
 
 var animatePiece = function(from, to, player, selected, callback) {
-  var msLength = 1000;
+  var msLength = 500;
   var frameRate = 30;
   
   var numSteps = msLength/frameRate;
@@ -533,14 +603,9 @@ var winner = function () {
   return '';
 }
 
-var resetDices = function () {
-  remainingDices = [];
-  currentDiceRoll = [];
-}
-
 var autoMove = function () {
   // sort remainingDices descending
-  remainingDices = remainingDices.sort(function(a, b){return b-a;});
+  var remainingDices = board.getRemainingDices().sort(function(a, b){return b-a;});
   var new_point;
   for (var i=0; i < remainingDices.length; i++) {
     new_point = board.getToPoint(currentPlayer, selectedPoint, remainingDices[i]);
@@ -563,14 +628,7 @@ var selectPoint = function (point) {
   selectedPoint = point;
 }
 
-var useDice = function(diceValue) {
-  console.log('use dice', diceValue, remainingDices, remainingDices.indexOf(diceValue));
-  remainingDices.splice(remainingDices.indexOf(diceValue), 1);
-  console.log('after', remainingDices);
-}
-
 var switchPlayer = function() {
-  resetDices();
   selectPoint(undefined);
   gameState = STATES.THROWING_DICE;
   currentPlayer = swap(currentPlayer);
@@ -614,37 +672,69 @@ var coordinatesToPoint = function (x, y) {
 
 // Convert a point 1-24 to x and y coordinates, offset means adding pieces
 var pointToCoordinates = function (point, offset) {
-  offset = offset || 0;  
-
-  var orientation_sign = 1;
-  var x,
-      y;
-  if (point <= 12) {
-    var start_x = containerWidth - conf.border - arrowWidth,
-        start_y = containerHeight - conf.border;
-    x = start_x - (point - 1) * arrowWidth;
-    y = start_y;
-    if (point > 6) {
-      x -= conf.border * 2;
+  
+  function pointToXPos (point) {
+    if (point == board.getHomePos(board.WHITE) || point == board.getHomePos(board.BLACK)) {
+      xPos = containerWidth - conf.border;
+    } else if (point == board.outPos(board.WHITE) || point == board.outPos(board.BLACK)) {
+      xPos = conf.border + halfBoardWidth;
+    } else if (point <= 12) {
+      xPos = conf.border + (12 - point) * arrowWidth + (point <= 6) * conf.border * 2;
+    } else {
+      xPos = conf.border + (point - 13) * arrowWidth + (point >= 19) * conf.border * 2;
     }
-  } else {
-    var start_x = conf.border,
-        start_y = conf.border;
-    orientation_sign = -1;
-    x = start_x + (point - 13) * arrowWidth;
-    y = conf.border;
-    if (point > 18) {
-      x += conf.border * 2;
-    }
+    // return center of circle
+    return xPos + arrowWidth / 2;
   }
-  // Add offset
-  y -= orientation_sign * offset * pieceRadius*2;
   
-  // Offset x and y to return center positions
-  x += arrowWidth/2;
-  y -= orientation_sign * arrowWidth/2;
+  function pointToYPos (point) {
+    if (point == board.getHomePos(board.WHITE)) {
+      yPos = conf.border;
+    } else if (point == board.getHomePos(board.BLACK)) {
+      yPos = containerHeight - conf.border;
+    } else if (point == board.outPos(board.WHITE)) {
+      yPos = containerHeight - conf.border - halfBoardWidth * 1/4;      
+    } else if (point == board.outPos(board.BLACK)) {
+      yPos = conf.border + halfBoardWidth * 1/4;
+    } else if (point <= 12) {
+      yPos = containerHeight - conf.border;
+    } else {
+      yPos = conf.border;
+    }
+    // return center of circle
+    return yPos + pointToOrientation(point) * arrowWidth / 2;
+  }
   
-  return [x, y];
+  function pointToOrientation (point) {
+    if (point == board.getHomePos(board.WHITE)) {
+      return 1;
+    } else if (point == board.getHomePos(board.BLACK)) {
+      return -1;
+    }
+    return (point <= 12) ? -1 : 1;
+  }
+  
+  function pointToOffsetLength (point, offset) {
+    // short offset
+    var offsetLength = pieceRadius / 2;
+    // long offset
+    if (point >= 1 && point <= 24) {
+      offsetLength = pieceRadius * 2;
+    }
+    var totalOffset = pointToOrientation(point) * offset * offsetLength;
+    if (offset > 4) {
+      totalOffset = pointToOrientation(point) * 4 * offsetLength + pointToOrientation(point) * (offset - 4) * pieceRadius / 2;
+    }
+    
+    return totalOffset;
+  }
+  offset = offset || 0;
+  
+  var xPos = pointToXPos(point);
+  
+  var yPos = pointToYPos(point) + pointToOffsetLength(point, offset);
+  
+  return [xPos, yPos]
 }
 
 //------------------------------------------------------------------------------
@@ -684,25 +774,21 @@ var onMouseClick = function (ev) {
 var throwDice = function() {
   if (gameState === STATES.CHOOSE_STARTER) {
     var value = getRandomDiceThrow();
+    board.addDice(value);
     // White has thrown
     if (currentPlayer == board.WHITE) {
-      currentDiceRoll.push(value);
-      remainingDices.push(value);
       currentPlayer = swap(currentPlayer);
     // Black has thrown
     } else {
-      if (value == currentDiceRoll[0]) {
+      var lastDice = board.getRemainingDices()[0];
+      if (value == lastDice) {
         alert('you hit the same redo');
-        currentDiceRoll = [];
-        remainingDices = [];
+        board.setDices([]);
         currentPlayer = board.WHITE;
       } else {
-
-        currentDiceRoll.push(value);
-        remainingDices = deepCopy(currentDiceRoll);
         gameState = STATES.MOVING;
         // Black won
-        if (value > currentDiceRoll[0]) {
+        if (value > lastDice) {
           currentPlayer = board.BLACK;
           console.log('black won, black starts');
         } else {
@@ -714,18 +800,14 @@ var throwDice = function() {
   } else if (gameState == STATES.THROWING_DICE) {
     var dice1 = getRandomDiceThrow(),
         dice2 = getRandomDiceThrow();
-    currentDiceRoll.push(dice1);
-    currentDiceRoll.push(dice2);
+    board.setDices([dice1, dice2])
     if ( dice1 == dice2 ) {
-      currentDiceRoll.push(dice1);
-      currentDiceRoll.push(dice2);
+      board.setDices([dice1, dice1, dice1, dice1]);
     }
-    remainingDices = deepCopy(currentDiceRoll);
-    console.log('dice throw', currentDiceRoll);
     gameState = STATES.MOVING;
     
     // If player can't move
-    if (!board.canMove(currentPlayer, remainingDices)) {
+    if (!board.canMove(currentPlayer)) {
       console.log('cant move switch player');
       switchPlayer();
     }
@@ -741,14 +823,12 @@ var applyMoves = function(moves) {
 }
 var _move = function (fromPoint, toPoint, player) {
   board.move(fromPoint, toPoint, player);
-  var steps = board.getSteps(fromPoint, toPoint, player);
-  useDice(steps);
   // Check if turn is done
-  if (remainingDices.length == 0) {          
+  if (!board.hasRemainingDices()) {          
     console.log(player, ' is done switching');
     switchPlayer();
   } else {
-    if ( !board.canMove(currentPlayer, remainingDices) ) {
+    if ( !board.canMove(currentPlayer) ) {
       switchPlayer();
     }
   }
@@ -777,7 +857,7 @@ var pointClicked = function (point) {
     }
     
     // valid move, move
-    if (board.isValidMove(selectedPoint, point, currentPlayer, remainingDices)) {
+    if (board.isValidMove(selectedPoint, point, currentPlayer)) {
       move(selectedPoint, point, currentPlayer);
     }
     selectPoint(undefined);
@@ -852,8 +932,8 @@ var drawDiceThrow = function() {
   }
   var y = halfBoardHeight/2,
       x = 3.5 * conf.border + halfBoardWidth;
-  for (var i=0; i < remainingDices.length; i++) {
-    showDice(context, x, y, 30, remainingDices[i]);
+  for (var i=0; i < curBoard().getRemainingDices().length; i++) {
+    showDice(context, x, y, 30, curBoard().getRemainingDices()[i]);
     x += 35;
   }
 }
@@ -876,39 +956,13 @@ var _drawPiece = function (x, y, player, selected) {
 var drawPieces = function () {
   
   // Draw ingame pieces
-  for (var point=1; point <= 24; point++) {
+  for (var point=0; point <= 34; point++) {
     for (var offset=0; offset < curBoard().getBoard()[point].length; offset++) {
       var x_y = pointToCoordinates(point, offset);
       var color = conf.colorMap[curBoard().getPlayerAtPoint(point)];
       var isSelected = point == selectedPoint && offset == curBoard().getPiecesAtPoint(point).length - 1;
       _drawPiece(x_y[0], x_y[1], curBoard().getPlayerAtPoint(point), isSelected);
     }
-  }
-  
-  // Draw out pieces
-  var outXPos = conf.border * 2 + halfBoardWidth;
-
-  var whiteOuts = curBoard().getPiecesAtPoint(curBoard().outPos(board.WHITE)).replace(board.BLACK, '');
-  for ( var i=0; i < whiteOuts.length; i++ ) {
-    var isSelected = curBoard().outPos(board.WHITE) == selectedPoint && i == curBoard().getPiecesAtPoint(curBoard().outPos(board.WHITE)).length - 1;
-    _drawPiece(outXPos, conf.border + halfBoardHeight * 3/4 + i * 30, board.WHITE, isSelected);
-  }
-  
-  var blackOuts = curBoard().getPiecesAtPoint(curBoard().outPos(board.BLACK)).replace(board.WHITE, '');
-  for ( var i=0; i < blackOuts.length; i++ ) {
-    var isSelected = curBoard().outPos(board.BLACK) == selectedPoint && i == board.getPiecesAtPoint(curBoard().outPos(board.BLACK)).length - 1;
-    _drawPiece(outXPos, halfBoardHeight * 1/4 + i * 30, board.BLACK, isSelected);
-  }
-  
-  // Draw home pieces
-  var homeXPos = conf.border * 3.5 + halfBoardWidth * 2;
-  
-  for ( var i=0; i < curBoard().numPiecesHome(board.WHITE); i++ ) {
-    _drawPiece(homeXPos, conf.border * 1.5  + i * 10, board.WHITE);
-  }
-  
-  for ( var i=0; i < curBoard().numPiecesHome(board.BLACK); i++ ) {
-    _drawPiece(homeXPos, halfBoardHeight + conf.border * 0.5  - i * 10, board.BLACK);
   }
 };
 
@@ -1061,10 +1115,6 @@ widget.getGameState = function () {
 
 widget.getCurrentPlayer = function () {
   return currentPlayer;
-}
-
-widget.getRemainingDices = function () {
-  return remainingDices;
 }
 
 widget.getBoard = function () {

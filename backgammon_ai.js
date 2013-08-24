@@ -78,7 +78,7 @@ var filterValidMoves = function(board, moves, player, dices) {
   for (var i=0; i<moves.length; i++) {
     var fromPoint = moves[i][0],
         toPoint = moves[i][1];
-    if (board.isValidMove(fromPoint, toPoint, player, dices)) {
+    if (board.isValidMove(fromPoint, toPoint, player)) {
       board.move(fromPoint, toPoint, player);
       validMoves.push([fromPoint, toPoint]);
     }
@@ -90,7 +90,7 @@ var filterValidMoves = function(board, moves, player, dices) {
 var getPossibleMoves = function (board, player, dices) {
   var possibleMoves = [];
   
-  var availablePositions = bg.getBoard().getPointsWithPlayer(player);
+  var availablePositions = board.getPointsWithPlayer(player);
 
   // Get all possible pieces to move
   var pointPermutations = getPermutations(availablePositions, dices.length, 2);
@@ -230,8 +230,9 @@ var movesToString = function (moves) {
 
 var chooseMove = function () {
   console.log('about to choose move');
+  console.log('remaining dices', bg.getBoard().getRemainingDices());
   var tmpBoard = bg.getBoard().copy()
-  var moves = getPossibleMoves(tmpBoard, me, bg.getRemainingDices());
+  var moves = getPossibleMoves(tmpBoard, me, bg.getBoard().getRemainingDices());
   console.log(moves.length, 'moves to evaluate');
   var bestMoveScore = -10000;
   var bestMoves = [];
