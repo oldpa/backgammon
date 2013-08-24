@@ -3,18 +3,31 @@
 	<head>
 		<script type="text/javascript" charset="utf-8" src="jquery.min.js"></script>
 		<script type="text/javascript" charset="utf-8" src="backgammon.js"></script>
+		<script type="text/javascript" charset="utf-8" src="backgammon_ai.js"></script>
 		
 		<script type="text/javascript" charset="utf-8">
 			window.onload = function () {
-			window.b = new BackGammon("backgammon");
+
+			var conf = {};
+			conf.playerTypeMap = {};
+			conf.playerTypeMap['b'] = "computer";
+			conf.playerTypeMap['w'] = "human";			
+			window.b = new BackGammon("backgammon", conf);
+			var ai = new BackGammonAI(b, b.BLACK);
+			b.registerStateListener(ai.stateChanged);
+
+// BLACK PIECE OUT
+b.loadState('{"currentPlayer":"b","gameState":2,"board":["","bbb","","","bbb","","bb","w","bb","","","w","","bb","","","ww","","ww","www","ww","ww","ww","","bb","b","","","","","","","","",""],"currentDiceRoll":[1,3],"remainingDices":[1,3]}');
+
+// White can move one piece only
+//b.loadState('{"currentPlayer":"w","gameState":2,"board":["","bbbbb","bbbb","bbb","","","","","","","","","","","","","","","ww","ww","www","wwww","www","w","bbb","","","","","","","","","",""],"currentDiceRoll":[6,3],"remainingDices":[6,3],"selectedPoint":19}');
+
+//b.loadState('{"currentPlayer":"b","gameState":2,"board":["","ww","","","","","bbbbb","","bbb","","","","wwwww","bbbbb","","","","www","","wwwww","","","","","bb","","","","","","","","","",""],"currentDiceRoll":[6,1],"remainingDices":[6,1]}');
+//b.loadState('{"currentPlayer":"b","gameState":2,"board":["","","b","","www","ww","bbbbb","","bb","","","","ww","bbbb","w","","","www","","ww","","b","b","ww","b","","","","","","","","","",""],"currentDiceRoll":[6,1],"remainingDices":[6]}');
+//b.loadState('{"currentPlayer":"b","gameState":2,"board":["","b","bb","bb","","b","bbbbb","bbb","b","","","","","","w","w","","","w","wwwww","w","wwww","","ww","","","","","","","","","","",""],"currentDiceRoll":[4,1],"remainingDices":[4,1]}')
+//b.loadState('{"currentPlayer":"b","gameState":2,"board":["","bb","","","","","","","","","","","","","","","","","","","ww","","w","w","","","","","","","","","","wwwwwwwwwww","bbbbbbbbbbbbb"],"currentDiceRoll":[3,3,3,3],"remainingDices":[3,3,3],"selectedPoint":1}')
 // End game
-			//b.loadState('{"currentPlayer":"w","gameState":4,"currentPosition":["","b","bb","","bbbbbb","","bbbbb","b","","","","","","","w","","","w","w","wwww","","wwww","wwww","","","","","","","","","","","",""],"currentDiceRoll":[],"remainingDices":[]}');
-// With home piece
-//b.loadState('{"currentPlayer":"b","gameState":4,"currentPosition":["","","","","bbbbbb","b","bbb","","","","","","","","","","","","","wwww","ww","www","ww","","","","","","","","","","","wwww","bbbbb"],"currentDiceRoll":[],"remainingDices":[]}');
-// LATEST
-//b.loadState('{"currentPlayer":"b","gameState":2,"currentPosition":["","","","","","","","","","","","","","","","","","","","","","","","","w","","","","","","","","","wwwwwwwwwwwwww","bbbbbbbbbbbbbbb"],"currentDiceRoll":[5,1],"remainingDices":[1]}');
-//locked piece
-//b.loadState('{"currentPlayer":"w","gameState":4,"currentPosition":["w","","bbb","bb","bb","bbb","bbbb","","b","","","","","","ww","","","ww","","www","www","b","wwww","","","","","","","","","","","",""],"currentDiceRoll":[],"remainingDices":[],"selectedPoint":9}');
+
 			};
 		</script>
 
