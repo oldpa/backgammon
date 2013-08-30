@@ -163,61 +163,36 @@ var getPermutations = function (list, length, maxUnique) {
   return permutations[length];
 }
 
-var applyMoves = function (board, moves, player) {
-  //console.log('apply moves', moves, player)
-  for (var i=0; i<moves.length; i++) {
-    board.move(moves[i][0], moves[i][1], player);
-  }
-  return board;
-}
-
 var getBoardValue = function(board, player) {
   var score = board.getPlayerScore(player);
   var safePieces = board.getPointsWithPlayer(player, 2);
   var unsafePieces = board.getPointsWithPlayer(player, 1, 1);
+  var outPieces = board.numPiecesOut(player);
+  var homePieces = board.numPiecesHome(player);
   // Higher score is worse
-  score += sum(unsafePieces)
-  score -= sum(safePieces);
+  
+  // Add score for each piece alone, the lower the point value the more score we add
+  score += sum(board.getPointsValue(unsafePieces, bg.swap(player)))
+  score -= sum(board.getPointsValue(safePieces, bg.swap(player)));
+  score += outPieces * 12;
+  score += homePieces * 12;
   return score;
 }
 
 var getMoveStrength = function (board, moves) {
-  var myScore = getBoardValue(board, me);
-  var oppScore = getBoardValue(board, opponent);
+  var myScoreBefore = getBoardValue(board, me);
+  var oppScoreBefore = getBoardValue(board, opponent);
   
   // Apply the moves to the board
   board.beginTransaction();
-  board = applyMoves(board, moves, me);
-  var scoreDiff = (myScore - getBoardValue(board, me)) - (oppScore - getBoardValue(board, opponent));
+  board.multiMoves(moves, me);
+  // Remember higher score is worse, so (before - after) should be higher for good moves
+  var myDiff = (myScoreBefore - getBoardValue(board, me));
+  var opDiff = (oppScoreBefore - getBoardValue(board, opponent))
+  console.log('diff', myDiff, opDiff, oppScoreBefore, getBoardValue(board, opponent), board.getPointsWithPlayer(board.WHITE));
+  var scoreDiff = myDiff - opDiff;
   board.rollback();
   return scoreDiff;
-  
-  /* 
-   * For later
-  // Foreach possible dice throw, get possible moves
-  var diceThrows = getPossibleDiceThrows();
-  var scoreDiffList = [];
-  for (var i=0; i<diceThrows.length ; i++) {
-    var possibleMoves = getPossibleMoves(board, opponent, diceThrows[i]);   
-    // Assume that the opponent will to the move that is best for opponent
-    var maxDiff = -1000000;
-    var bestMove = 0;
-    for (var j=0; j<possibleMoves.length; j++) {
-      board.beginTransaction();
-      applyMoves(board, possibleMoves[j], opponent);
-      var scoreDiff = (myScore - getBoardValue(board, me)) - (oppScore - getBoardValue(board, opponent));
-      //console.log('Checking', movesToString(possibleMoves[j]), scoreDiff);
-      if (scoreDiff > maxDiff) {
-        maxDiff = scoreDiff;
-        bestMove = possibleMoves[j];
-      }
-      board.rollback();
-    }
-    scoreDiffList.push(maxDiff);
-  }
-  */
-  
-
 }
 
 var movesToString = function (moves) {
@@ -238,6 +213,7 @@ var chooseMove = function () {
   var bestMoves = [];
   for (var i=0; i < moves.length; i++){
     var strength = getMoveStrength(tmpBoard, moves[i]);
+    console.log(movesToString(moves[i]), strength)
     if (strength > bestMoveScore) {
       bestMoveScore = strength;
       bestMoves = moves[i];
@@ -273,7 +249,8 @@ var runTests = function () {
 }
 
 return_object.stateChanged = stateChanged;
-return_object.runTests = runTests;
+return_object.getBoardValue = getBoardValue;
+
   
 return return_object;
 } // end window.BackGammonAI

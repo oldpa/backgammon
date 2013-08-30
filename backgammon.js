@@ -94,6 +94,16 @@ var getPointValue = function (point, player) {
   }
 }
 
+// return values of array
+var getPointsValue = function (points, player) {
+  var ret = [];
+  for (var i=0; i < points.length; i++) {
+    ret.push(getPointValue(points[i], player))
+  }
+  return ret;
+  
+}
+
 var getPlayerScore = function (player) {
   var score = 0;
   var playerPoints = getPointsWithPlayer(player);
@@ -265,6 +275,12 @@ var _movePiece = function (from_point, to_point) {
   }
 }
 
+var multiMoves = function (moves, player) {
+  for (var i=0; i < moves.length; i++) {
+    move(moves[i][0], moves[i][1], player);
+  }
+}
+
 var move = function (from_point, to_point, player) {
   var moves = getMovesWhenMoving(from_point, to_point, player);
   for (var i=0; i < moves.length; i++) {
@@ -368,6 +384,7 @@ return_object.getNumPiecesAtPoint = getNumPiecesAtPoint;
 return_object.canMove = canMove;
 return_object.isValidMove = isValidMove;
 return_object.move = move;
+return_object.multiMoves = multiMoves;
 return_object.outPos = outPos;
 return_object.getHomePos = getHomePos;
 return_object.numPiecesHome = numPiecesHome;
@@ -385,6 +402,8 @@ return_object.hasRemainingDices = hasRemainingDices;
 return_object.addDice = addDice;
 return_object.toObject = toObject;
 return_object.fromObject = fromObject;
+return_object.getPointsValue = getPointsValue;
+return_object.numPiecesOut = numPiecesOut;
 // constants
 return_object.WHITE = WHITE;
 return_object.BLACK = BLACK;
@@ -903,6 +922,10 @@ var drawRollButton = function() {
     context.rect(ROLL_BUTTON_X, ROLL_BUTTON_Y, ROLL_BUTTON_WIDTH, ROLL_BUTTON_HEIGHT);
     context.fillStyle = 'white';
     context.fill();
+    
+    context.beginPath();
+    context.fillStyle = 'black'
+    context.fillText('Roll', ROLL_BUTTON_X + 16, ROLL_BUTTON_Y + 17)
   }
 }
 
@@ -952,7 +975,6 @@ var _drawPiece = function (x, y, player, selected) {
   context.fill();
 }
 
-// TODO Refactor this into one big loop
 var drawPieces = function () {
   
   // Draw ingame pieces
